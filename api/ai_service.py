@@ -11,7 +11,7 @@ def get_client():
     return Groq(api_key=api_key)
 
 def generate_revision_plan(topic_title, topic_content, files_text=""):
-    client = get_client()  # ← adiciona esta linha no início
+    client = get_client()
     
     combined_content = f"""
     Topic: {topic_title}

@@ -2,6 +2,8 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 import dj_database_url
+from datetime import timedelta
+
 
 load_dotenv()  # ← carrega o .env
 
@@ -39,9 +41,13 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://revisai.vercel.app",
+    "https://revisai-iota.vercel.app",
 ]
 CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://revisai-.*\.vercel\.app$",
+]
 
 AUTH_USER_MODEL = 'api.User'
 ROOT_URLCONF = 'RevisAI.urls'
@@ -107,3 +113,14 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'joyceacaciopedro2005@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'rxby joqk qcgt enlj')
 DEFAULT_FROM_EMAIL = f'RevisAI <{EMAIL_HOST_USER}>'
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    # Força uma chave de assinatura longa e segura para o JWT
+    'SIGNING_KEY': 'revisai-super-secret-signing-key-value-with-more-than-32-characters',
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
