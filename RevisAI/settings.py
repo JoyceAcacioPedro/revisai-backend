@@ -113,7 +113,7 @@ EMAIL_USE_SSL = True
 EMAIL_USE_TLS = False
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = f'RevisAI <{EMAIL_HOST_USER}>'
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', 'joyceacaciopedro2005@gmail.com')
 EMAIL_TIMEOUT = 10
 
 
