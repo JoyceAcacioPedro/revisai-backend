@@ -21,6 +21,9 @@ from .models import User, Subject, Activity, Topic, TopicFile
 
 import uuid
 
+import traceback
+
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -231,25 +234,24 @@ def study_activity(request, pk):
 
 
 @api_view(['POST'])
+@api_view(['POST'])
 def send_verification_code(request):
     email = request.data.get('email')
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=404)
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
     if user.is_verified:
-        return Response({"message": "Already verified"})
+        return Response({"message": "Already verified"}, status=status.HTTP_200_OK)
 
     # Gera código de 6 dígitos
     code = str(random.randint(100000, 999999))
     user.verification_code = code
     user.save()
 
-
-    send_mail(
-    subject='Welcome to RevisAI — Verify your email',
-    message=f'''Hey {user.first_name or "there"}! 👋
+    subject = 'Welcome to RevisAI — Verify your email'
+    message = f'''Hey {user.first_name or "there"}! 👋
 
 Welcome to RevisAI — your AI-powered study companion.
 
@@ -264,12 +266,26 @@ This code expires in 10 minutes.
 If you didn't create an account, you can safely ignore this email.
 
 Study smart,
-The RevisAI Team ✦''',
-    from_email=settings.DEFAULT_FROM_EMAIL,
-    recipient_list=[email],
-)
+The RevisAI Team ✦'''
 
-    return Response({"message": "Code sent"})
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return Response({"message": "Code sent"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        print("=" * 60)
+        print("ERRO DETALHADO NO ENVIO DE EMAIL (BREVO/SMTP):")
+        print(traceback.format_exc())
+        print("=" * 60)
+        return Response(
+            {"error": f"Email service error: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
@@ -297,17 +313,15 @@ def forgot_password(request):
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=404)
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
     token = str(uuid.uuid4())
     user.reset_token = token
     user.save()
 
-    reset_link = f"http://localhost:5173/reset-password?token={token}&email={email}"
+    reset_link = f"https://revisai-iota.vercel.app/reset-password?token={token}&email={email}"
 
-    send_mail(
-    subject='RevisAI — Reset your password',
-    message=f'''Hey {user.first_name or "there"}! 👋
+    message = f'''Hey {user.first_name or "there"}! 👋
 
 We received a request to reset your RevisAI password.
 
@@ -318,14 +332,26 @@ Click the link below to choose a new password:
 This link expires in 1 hour. If you didn't request this, ignore this email — your account is safe.
 
 Study smart,
-The RevisAI Team ✦''',
-    from_email=settings.DEFAULT_FROM_EMAIL,
-    recipient_list=[email],
-)
+The RevisAI Team ✦'''
 
-    return Response({"message": "Reset link sent"})
-
-
+    try:
+        send_mail(
+            subject='RevisAI — Reset your password',
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return Response({"message": "Reset link sent"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        print("=" * 60)
+        print("ERRO DETALHADO NO RESET DE PASSWORD:")
+        print(traceback.format_exc())
+        print("=" * 60)
+        return Response(
+            {"error": f"Email service error: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 @api_view(['POST'])
 def reset_password(request):
     email = request.data.get('email')
