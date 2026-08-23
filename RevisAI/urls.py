@@ -23,6 +23,15 @@ from django.urls import path
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 
+def create_admin_quick(request):
+    User = get_user_model()
+    user, _ = User.objects.get_or_create(username='admin', email='joyceacaciopedro2005@gmail.com')
+    user.set_password('AdminRevisAI2026!')
+    user.is_staff = True
+    user.is_superuser = True
+    user.is_verified = True
+    user.save()
+    return JsonResponse({"status": "Superuser criado com sucesso na nuvem!"})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -33,13 +42,5 @@ urlpatterns = [
 ]
 
 
-def create_admin_quick(request):
-    User = get_user_model()
-    user, _ = User.objects.get_or_create(username='admin', email='joyceacaciopedro2005@gmail.com')
-    user.set_password('AdminRevisAI2026!')
-    user.is_staff = True
-    user.is_superuser = True
-    user.is_verified = True
-    user.save()
-    return JsonResponse({"status": "Superuser criado com sucesso na nuvem!"})
+
 
