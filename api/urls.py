@@ -27,4 +27,5 @@ urlpatterns = [
     path('auth/verify/', verify_email),
     path('auth/forgot-password/', forgot_password),
     path('auth/reset-password/', reset_password),
+    
 ]

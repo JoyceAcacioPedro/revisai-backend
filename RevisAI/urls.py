@@ -19,17 +19,19 @@ from django.urls import path, include
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from django.urls import path
+from django.http import JsonResponse
+from django.contrib.auth import get_user_model
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
      path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),   # login
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # renovar token
+    path('api/setup-admin/', create_admin_quick),
 ]
 
-
-from django.urls import path
-from django.http import JsonResponse
-from django.contrib.auth import get_user_model
 
 def create_admin_quick(request):
     User = get_user_model()
@@ -41,5 +43,3 @@ def create_admin_quick(request):
     user.save()
     return JsonResponse({"status": "Superuser criado com sucesso na nuvem!"})
 
-# Adiciona esta linha dentro de urlpatterns = [ ... ]
-path('api/setup-admin/', create_admin_quick),
