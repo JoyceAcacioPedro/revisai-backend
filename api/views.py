@@ -1,3 +1,10 @@
+import os
+import random
+import uuid
+import traceback
+import requests
+from datetime import date
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action
@@ -5,26 +12,56 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
-from django.core.mail import send_mail
 from django.conf import settings
-from datetime import date
-import random
-import uuid
-import traceback
 
 from .models import User, Subject, Activity, Topic, TopicFile
 from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
 from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
 
-import threading
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from django.core.mail import send_mail
-from django.conf import settings
-import random
-import traceback
+# ==========================================
+# FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
+# ==========================================
+def send_brevo_email(to_email, subject, message):
+    api_key = os.getenv('BREVO_API_KEY')
+    if not api_key:
+        print("❌ ATENÇÃO: BREVO_API_KEY não foi encontrada nas variáveis de ambiente.")
+        return False
 
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+        "content-type": "application/json"
+    }
+
+    payload = {
+        "sender": {
+            "name": "RevisAI",
+            "email": getattr(settings, 'DEFAULT_FROM_EMAIL', 'joyceacaciopedro2005@gmail.com')
+        },
+        "to": [
+            {"email": to_email}
+        ],
+        "subject": subject,
+        "textContent": message
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=5)
+        if response.status_code in [200, 201, 202]:
+            print(f"✅ E-mail enviado via API Brevo com sucesso para {to_email}")
+            return True
+        else:
+            print(f"❌ Erro na API Brevo ({response.status_code}): {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Exceção ao ligar à API da Brevo: {str(e)}")
+        return False
+
+
+# ==========================================
+# VIEWSETS
+# ==========================================
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -41,7 +78,7 @@ class UserViewSet(viewsets.ModelViewSet):
             user.verification_code = code
             user.save()
 
-            # 3. Prepara o conteúdo do e-mail
+            # 3. Conteúdo do E-mail
             subject = 'Welcome to RevisAI — Verify your email'
             message = f'''Hey {user.first_name or "there"}! 👋
 
@@ -60,30 +97,10 @@ If you didn't create an account, you can safely ignore this email.
 Study smart,
 The RevisAI Team ✦'''
 
-            # Função isolada para o worker assíncrono
-            def send_email_async(email_subject, email_message, recipient):
-                try:
-                    send_mail(
-                        subject=email_subject,
-                        message=email_message,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[recipient],
-                        fail_silently=False,
-                    )
-                    print(f"E-mail de verificação enviado com sucesso para {recipient}")
-                except Exception as e:
-                    print("=" * 60)
-                    print(f"ERRO ASSÍNCRONO AO ENVIAR EMAIL PARA {recipient}:")
-                    print(traceback.format_exc())
-                    print("=" * 60)
+            # 4. Envio direto via API HTTP (sem bloquear a resposta)
+            send_brevo_email(user.email, subject, message)
 
-            # 4. Dispara a thread (não bloqueia a resposta HTTP)
-            threading.Thread(
-                target=send_email_async, 
-                args=(subject, message, user.email)
-            ).start()
-
-            # 5. Retorna resposta 201 IMEDIATAMENTE ao Vercel
+            # 5. Retorna 201 Created imediatamente ao Vercel
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -157,6 +174,9 @@ class TopicViewSet(viewsets.ModelViewSet):
             print(f"Erro ao gerar plano de revisão: {e}")
 
 
+# ==========================================
+# ENDPOINTS ADICIONAIS
+# ==========================================
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -261,6 +281,9 @@ def study_activity(request, pk):
 @api_view(['POST'])
 def send_verification_code(request):
     email = request.data.get('email')
+    if not email:
+        return Response({"error": "Email é obrigatório"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
@@ -291,24 +314,8 @@ If you didn't create an account, you can safely ignore this email.
 Study smart,
 The RevisAI Team ✦'''
 
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        return Response({"message": "Code sent"}, status=status.HTTP_200_OK)
-    except Exception as e:
-        print("=" * 60)
-        print("ERRO DETALHADO NO ENVIO DE EMAIL (BREVO/SMTP):")
-        print(traceback.format_exc())
-        print("=" * 60)
-        return Response(
-            {"error": f"Email service error: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    send_brevo_email(email, subject, message)
+    return Response({"message": "Code sent"}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -333,6 +340,9 @@ def verify_email(request):
 @api_view(['POST'])
 def forgot_password(request):
     email = request.data.get('email')
+    if not email:
+        return Response({"error": "Email é obrigatório"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
@@ -357,24 +367,8 @@ This link expires in 1 hour. If you didn't request this, ignore this email — y
 Study smart,
 The RevisAI Team ✦'''
 
-    try:
-        send_mail(
-            subject='RevisAI — Reset your password',
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        return Response({"message": "Reset link sent"}, status=status.HTTP_200_OK)
-    except Exception as e:
-        print("=" * 60)
-        print("ERRO DETALHADO NO RESET DE PASSWORD:")
-        print(traceback.format_exc())
-        print("=" * 60)
-        return Response(
-            {"error": f"Email service error: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    send_brevo_email(email, 'RevisAI — Reset your password', message)
+    return Response({"message": "Reset link sent"}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
