@@ -5,23 +5,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
-from datetime import date
-
-from .models import User, Subject, Activity, Topic
-from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
-from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
-
-
 from django.core.mail import send_mail
 from django.conf import settings
+from datetime import date
 import random
+import uuid
+import traceback
 
 from .models import User, Subject, Activity, Topic, TopicFile
-
-
-import uuid
-
-import traceback
+from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
+from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -32,7 +25,47 @@ class UserViewSet(viewsets.ModelViewSet):
     def register(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            # 1. Cria o utilizador
+            user = serializer.save()
+
+            # 2. Gera o código de verificação
+            code = str(random.randint(100000, 999999))
+            user.verification_code = code
+            user.save()
+
+            # 3. Prepara e envia o e-mail de verificação
+            subject = 'Welcome to RevisAI — Verify your email'
+            message = f'''Hey {user.first_name or "there"}! 👋
+
+Welcome to RevisAI — your AI-powered study companion.
+
+To activate your account, use the verification code below:
+
+━━━━━━━━━━━━━━━━━━
+  {code}
+━━━━━━━━━━━━━━━━━━
+
+This code expires in 10 minutes.
+
+If you didn't create an account, you can safely ignore this email.
+
+Study smart,
+The RevisAI Team ✦'''
+
+            try:
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                print("=" * 60)
+                print("ERRO AO ENVIAR EMAIL NO REGISTO:")
+                print(traceback.format_exc())
+                print("=" * 60)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -45,7 +78,7 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "Invalid credentials"}, status=400)
 
-        # ← Bloqueia se não verificado
+        # Bloqueia se não estiver verificado
         if not user_obj.is_verified:
             return Response({
                 "error": "email_not_verified",
@@ -86,6 +119,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
         user = self.request.user
         today = date.today()
         return Activity.objects.filter(user=user, data=today)
+
 
 class TopicViewSet(viewsets.ModelViewSet):
     serializer_class = TopicSerializer
@@ -229,11 +263,8 @@ def study_activity(request, pk):
     except Exception as e:
         print(f"Erro ao gerar conteúdo: {e}")
         return Response({"error": str(e)}, status=500)
-    
 
 
-
-@api_view(['POST'])
 @api_view(['POST'])
 def send_verification_code(request):
     email = request.data.get('email')
@@ -245,7 +276,6 @@ def send_verification_code(request):
     if user.is_verified:
         return Response({"message": "Already verified"}, status=status.HTTP_200_OK)
 
-    # Gera código de 6 dígitos
     code = str(random.randint(100000, 999999))
     user.verification_code = code
     user.save()
@@ -352,6 +382,8 @@ The RevisAI Team ✦'''
             {"error": f"Email service error: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
 @api_view(['POST'])
 def reset_password(request):
     email = request.data.get('email')
@@ -368,6 +400,3 @@ def reset_password(request):
     user.save()
 
     return Response({"message": "Password reset successfully"})
-
-
-

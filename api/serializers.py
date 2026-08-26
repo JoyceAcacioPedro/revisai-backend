@@ -6,23 +6,27 @@ from .models import Topic, Activity
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 
-                  'password', 'country', 'date_joined', 'is_verified']
+        fields = ['id', 'email', 'first_name', 'last_name', 'password', 'country']
         extra_kwargs = {
             'password': {'write_only': True},
-            'date_joined': {'read_only': True},
-            'is_verified': {'read_only': True},
+            'email': {'required': True}
         }
 
+    def validate_email(self, value):
+        # Validação amigável antes de bater na base de dados
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Este e-mail já está registado.")
+        return value
+
     def create(self, validated_data):
+        email = validated_data['email']
         user = User.objects.create_user(
-            username=validated_data['email'],
-            email=validated_data['email'],
+            username=email, # O username passa a ser exatamente o e-mail
+            email=email,
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            country=validated_data.get('country', ''),
-            is_verified=False,
+            country=validated_data.get('country', '')
         )
         return user
 
