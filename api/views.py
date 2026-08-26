@@ -52,7 +52,9 @@ If you didn't create an account, you can safely ignore this email.
 Study smart,
 The RevisAI Team ✦'''
 
+            email_sent = False
             try:
+                # O fail_silently=False garante exceção, mas o bloco try previne o status 500
                 send_mail(
                     subject=subject,
                     message=message,
@@ -60,13 +62,18 @@ The RevisAI Team ✦'''
                     recipient_list=[user.email],
                     fail_silently=False,
                 )
+                email_sent = True
             except Exception as e:
                 print("=" * 60)
                 print("ERRO AO ENVIAR EMAIL NO REGISTO:")
                 print(traceback.format_exc())
                 print("=" * 60)
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # 4. Retorna resposta ao Vercel informando o estado
+            data = serializer.data
+            data['email_sent'] = email_sent
+            return Response(data, status=status.HTTP_201_CREATED)
+            
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'])
