@@ -16,6 +16,14 @@ from .models import User, Subject, Activity, Topic, TopicFile
 from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
 from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
 
+import threading
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from django.core.mail import send_mail
+from django.conf import settings
+import random
+import traceback
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -25,7 +33,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def register(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            # 1. Cria o utilizador
+            # 1. Guarda o utilizador na BD
             user = serializer.save()
 
             # 2. Gera o código de verificação
@@ -33,7 +41,7 @@ class UserViewSet(viewsets.ModelViewSet):
             user.verification_code = code
             user.save()
 
-            # 3. Prepara e envia o e-mail de verificação
+            # 3. Prepara o conteúdo do e-mail
             subject = 'Welcome to RevisAI — Verify your email'
             message = f'''Hey {user.first_name or "there"}! 👋
 
@@ -52,55 +60,33 @@ If you didn't create an account, you can safely ignore this email.
 Study smart,
 The RevisAI Team ✦'''
 
-            email_sent = False
-            try:
-                # O fail_silently=False garante exceção, mas o bloco try previne o status 500
-                send_mail(
-                    subject=subject,
-                    message=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=False,
-                )
-                email_sent = True
-            except Exception as e:
-                print("=" * 60)
-                print("ERRO AO ENVIAR EMAIL NO REGISTO:")
-                print(traceback.format_exc())
-                print("=" * 60)
+            # Função isolada para o worker assíncrono
+            def send_email_async(email_subject, email_message, recipient):
+                try:
+                    send_mail(
+                        subject=email_subject,
+                        message=email_message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[recipient],
+                        fail_silently=False,
+                    )
+                    print(f"E-mail de verificação enviado com sucesso para {recipient}")
+                except Exception as e:
+                    print("=" * 60)
+                    print(f"ERRO ASSÍNCRONO AO ENVIAR EMAIL PARA {recipient}:")
+                    print(traceback.format_exc())
+                    print("=" * 60)
 
-            # 4. Retorna resposta ao Vercel informando o estado
-            data = serializer.data
-            data['email_sent'] = email_sent
-            return Response(data, status=status.HTTP_201_CREATED)
-            
+            # 4. Dispara a thread (não bloqueia a resposta HTTP)
+            threading.Thread(
+                target=send_email_async, 
+                args=(subject, message, user.email)
+            ).start()
+
+            # 5. Retorna resposta 201 IMEDIATAMENTE ao Vercel
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=False, methods=['post'])
-    def login(self, request):
-        email = request.data.get('email')
-        password = request.data.get('password')
-        try:
-            user_obj = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"error": "Invalid credentials"}, status=400)
-
-        # Bloqueia se não estiver verificado
-        if not user_obj.is_verified:
-            return Response({
-                "error": "email_not_verified",
-                "message": "Please verify your email before logging in."
-            }, status=403)
-
-        user = authenticate(username=user_obj.username, password=password)
-        if user:
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "message": "Login successful"
-            })
-        return Response({"error": "Invalid credentials"}, status=400)
 
 
 class SubjectViewSet(viewsets.ModelViewSet):

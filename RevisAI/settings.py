@@ -138,3 +138,5 @@ SIMPLE_JWT = {
     'SIGNING_KEY': 'revisai-super-secret-signing-key-value-with-more-than-32-characters',
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+EMAIL_TIMEOUT = 10
