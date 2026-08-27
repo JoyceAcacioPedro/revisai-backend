@@ -398,31 +398,35 @@ def reset_password(request):
     return Response({"message": "Password reset successfully"})
 
 
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    # 1. Avisa o Django que o campo 'email' é válido e pode ser recebido
+    email = serializers.CharField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 2. Desativa a obrigatoriedade do campo padrão 'username'
+        self.fields[self.username_field].required = False
+
     def validate(self, attrs):
-        # 1. Pega e-mail/username e password enviados pelo React
-        email_or_username = attrs.get("email") or attrs.get("username")
+        # 3. Agora o código consegue prosseguir e capturar o email em segurança
+        email_or_username = attrs.get("email") or attrs.get(self.username_field)
         password = attrs.get("password")
 
         if not email_or_username or not password:
-            raise exceptions.AuthenticationFailed("Email e senha são obrigatórios.")
+            raise exceptions.AuthenticationFailed("Email e palavra-passe são obrigatórios.")
 
-        # 2. Busca o utilizador na base de dados
         user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
                    User.objects.filter(username__iexact=email_or_username).first()
 
         if not user_obj:
-            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
+            raise exceptions.AuthenticationFailed("Utilizador não encontrado.")
 
-        # 3. Compara a palavra-passe com a hash pbkdf2_sha256
         if not user_obj.check_password(password):
-            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
+            raise exceptions.AuthenticationFailed("Palavra-passe incorreta.")
 
         if not user_obj.is_active:
-            raise exceptions.AuthenticationFailed("Esta conta está inativa.")
+            raise exceptions.AuthenticationFailed("Conta inativa.")
 
-        # 4. Gera os tokens JWT válidos
         refresh = self.get_token(user_obj)
 
         return {
