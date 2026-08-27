@@ -2,7 +2,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
+
+# Importe a view customizada da sua aplicação
+from api.views import CustomTokenObtainPairView
 
 def create_admin_quick(request):
     User = get_user_model()
@@ -17,9 +20,8 @@ def create_admin_quick(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # IMPORTANTE: Colocar as rotas de login ANTES do include('api.urls')
-    # para evitar conflito com o router.register(r'user', UserViewSet)
-    path('api/user/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Rota atualizada utilizando a classe customizada
+    path('api/user/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     path('api/', include('api.urls')),

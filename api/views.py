@@ -18,6 +18,9 @@ from .models import User, Subject, Activity, Topic, TopicFile
 from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
 from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
 # ==========================================
 # FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
 # ==========================================
@@ -388,3 +391,17 @@ def reset_password(request):
     user.save()
 
     return Response({"message": "Password reset successfully"})
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Mapeia o campo 'email' enviado pelo frontend para 'username' se necessário
+        email_or_username = attrs.get("email") or attrs.get("username")
+        password = attrs.get("password")
+
+        if email_or_username and password:
+            attrs[self.username_field] = email_or_username
+
+        return super().validate(attrs)
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
