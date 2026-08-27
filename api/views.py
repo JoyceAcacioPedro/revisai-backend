@@ -21,6 +21,11 @@ from .ai_service import generate_revision_plan, generate_summary, generate_flash
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
 # ==========================================
 # FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
 # ==========================================
@@ -392,14 +397,22 @@ def reset_password(request):
 
     return Response({"message": "Password reset successfully"})
 
+
+
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Mapeia o campo 'email' enviado pelo frontend para 'username' se necessário
-        email_or_username = attrs.get("email") or attrs.get("username")
-        password = attrs.get("password")
-
-        if email_or_username and password:
-            attrs[self.username_field] = email_or_username
+        # Aceita o campo 'email' enviado pelo frontend da Vercel
+        email = attrs.get("email") or attrs.get("username")
+        
+        if email:
+            try:
+                # Procura o utilizador correspondente ao e-mail no backend
+                user_obj = User.objects.get(email=email)
+                attrs[self.username_field] = getattr(user_obj, self.username_field, user_obj.username)
+            except User.DoesNotExist:
+                attrs[self.username_field] = email
 
         return super().validate(attrs)
 
