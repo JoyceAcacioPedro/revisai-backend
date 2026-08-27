@@ -5,26 +5,24 @@ import traceback
 import requests
 from datetime import date
 
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers, exceptions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.contrib.auth import authenticate
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from django.contrib.auth import authenticate, get_user_model
 from django.conf import settings
 
 from .models import User, Subject, Activity, Topic, TopicFile
 from .serializers import UserSerializer, SubjectSerializer, ActivitySerializer, TopicSerializer
 from .ai_service import generate_revision_plan, generate_summary, generate_flashcards, generate_quiz
 
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
-
-from django.contrib.auth import get_user_model
-
-from rest_framework import exceptions
 User = get_user_model()
+
 
 # ==========================================
 # FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
@@ -42,7 +40,6 @@ def send_brevo_email(to_email, subject, message):
         "content-type": "application/json"
     }
 
-    # Remetente verificado na conta Brevo
     payload = {
         "sender": {
             "name": "RevisAI",
@@ -155,7 +152,7 @@ class TopicViewSet(viewsets.ModelViewSet):
             topic_files = TopicFile.objects.filter(topic=topic)
             files_text = extract_text_from_files(topic_files)
 
-            combined_content = topic.content
+            combined_content = topic.content or ""
             if files_text:
                 combined_content += '\n\n' + files_text
 
@@ -333,7 +330,6 @@ def verify_email(request):
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    # Converte explicitamente para string e limpa qualquer espaço acidental
     stored_code = str(user.verification_code).strip() if user.verification_code else ""
     received_code = str(code).strip()
 
@@ -398,17 +394,17 @@ def reset_password(request):
     return Response({"message": "Password reset successfully"})
 
 
+# ==========================================
+# CUSTOM LOGIN JWT SERIALIZER
+# ==========================================
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    # 1. Avisa o Django que o campo 'email' é válido e pode ser recebido
     email = serializers.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # 2. Desativa a obrigatoriedade do campo padrão 'username'
         self.fields[self.username_field].required = False
 
     def validate(self, attrs):
-        # 3. Agora o código consegue prosseguir e capturar o email em segurança
         email_or_username = attrs.get("email") or attrs.get(self.username_field)
         password = attrs.get("password")
 
@@ -419,10 +415,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                    User.objects.filter(username__iexact=email_or_username).first()
 
         if not user_obj:
-            raise exceptions.AuthenticationFailed("Utilizador não encontrado.")
+            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
         if not user_obj.check_password(password):
-            raise exceptions.AuthenticationFailed("Palavra-passe incorreta.")
+            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
         if not user_obj.is_active:
             raise exceptions.AuthenticationFailed("Conta inativa.")
@@ -435,6 +431,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "email": user_obj.email,
             "username": user_obj.username,
         }
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
