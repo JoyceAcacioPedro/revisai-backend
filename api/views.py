@@ -21,10 +21,9 @@ from .ai_service import generate_revision_plan, generate_summary, generate_flash
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import get_user_model
-User = get_user_model()
+
+
 
 # ==========================================
 # FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
@@ -401,18 +400,21 @@ def reset_password(request):
 
 
 
+User = get_user_model()
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Aceita o campo 'email' enviado pelo frontend da Vercel
-        email = attrs.get("email") or attrs.get("username")
+        # 1. Pega o valor enviado no campo 'email' ou 'username' do React
+        email_or_username = attrs.get("email") or attrs.get("username")
         
-        if email:
-            try:
-                # Procura o utilizador correspondente ao e-mail no backend
-                user_obj = User.objects.get(email=email)
-                attrs[self.username_field] = getattr(user_obj, self.username_field, user_obj.username)
-            except User.DoesNotExist:
-                attrs[self.username_field] = email
+        if email_or_username:
+            # 2. Busca o usuário no banco pelo e-mail ou username (sem diferenciar maiúsculas/minúsculas)
+            user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
+                       User.objects.filter(username__iexact=email_or_username).first()
+
+            if user_obj:
+                # 3. Injeta o username real do banco na chave esperada pelo SimpleJWT
+                attrs[self.username_field] = user_obj.username
 
         return super().validate(attrs)
 
