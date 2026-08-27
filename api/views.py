@@ -399,40 +399,37 @@ def reset_password(request):
 
 
 
-
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Captura o e-mail/username e password vindos do payload React
+        # 1. Pega e-mail/username e password enviados pelo React
         email_or_username = attrs.get("email") or attrs.get("username")
         password = attrs.get("password")
 
         if not email_or_username or not password:
-            raise exceptions.AuthenticationFailed("Preencha o e-mail e a palavra-passe.")
+            raise exceptions.AuthenticationFailed("Email e senha são obrigatórios.")
 
-        # Procura o utilizador por e-mail ou username
+        # 2. Busca o utilizador na base de dados
         user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
                    User.objects.filter(username__iexact=email_or_username).first()
 
         if not user_obj:
             raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
-        # Autentica explicitamente utilizando o username guardado na BD
-        authenticated_user = authenticate(username=user_obj.username, password=password)
-
-        if not authenticated_user:
+        # 3. Compara a palavra-passe com a hash pbkdf2_sha256
+        if not user_obj.check_password(password):
             raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
-        if not authenticated_user.is_active:
-            raise exceptions.AuthenticationFailed("Utilizador inativo.")
+        if not user_obj.is_active:
+            raise exceptions.AuthenticationFailed("Esta conta está inativa.")
 
-        refresh = self.get_token(authenticated_user)
+        # 4. Gera os tokens JWT válidos
+        refresh = self.get_token(user_obj)
 
         return {
             "refresh": str(refresh),
             "access": str(refresh.access_token),
-            "email": authenticated_user.email,
-            "username": authenticated_user.username,
+            "email": user_obj.email,
+            "username": user_obj.username,
         }
 
 class CustomTokenObtainPairView(TokenObtainPairView):

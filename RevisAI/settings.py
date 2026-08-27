@@ -141,8 +141,16 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
-    'SIGNING_KEY': 'revisai-super-secret-signing-key-value-with-more-than-32-characters',
+    
+    # Usa a SECRET_KEY global do Django em vez de uma string hardcoded
+    'SIGNING_KEY': SECRET_KEY,
+    'ALGORITHM': 'HS256',
     'AUTH_HEADER_TYPES': ('Bearer',),
+    
+    # Mapeamento do modelo de utilizador para e-mail
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
 }
 
 EMAIL_TIMEOUT = 10
