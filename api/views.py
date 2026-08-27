@@ -23,6 +23,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from django.contrib.auth import get_user_model
 
+from rest_framework import exceptions
 
 
 # ==========================================
@@ -404,19 +405,42 @@ User = get_user_model()
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # 1. Pega o valor enviado no campo 'email' ou 'username' do React
+        # 1. Pega os dados enviados pelo React
         email_or_username = attrs.get("email") or attrs.get("username")
-        
-        if email_or_username:
-            # 2. Busca o usuário no banco pelo e-mail ou username (sem diferenciar maiúsculas/minúsculas)
-            user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
-                       User.objects.filter(username__iexact=email_or_username).first()
+        password = attrs.get("password")
 
-            if user_obj:
-                # 3. Injeta o username real do banco na chave esperada pelo SimpleJWT
-                attrs[self.username_field] = user_obj.username
+        if not email_or_username or not password:
+            raise exceptions.AuthenticationFailed("Email e senha são obrigatórios.")
 
-        return super().validate(attrs)
+        # 2. Busca o usuário pelo email (case-insensitive) ou pelo username
+        user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
+                   User.objects.filter(username__iexact=email_or_username).first()
+
+        if not user_obj:
+            raise exceptions.AuthenticationFailed("Usuário não encontrado com este e-mail.")
+
+        # 3. Tenta autenticar usando o username real do banco
+        authenticated_user = authenticate(username=user_obj.username, password=password)
+
+        # Se falhou, tenta autenticar usando o e-mail como username (caso o USERNAME_FIELD do model seja email)
+        if not authenticated_user:
+            authenticated_user = authenticate(username=user_obj.email, password=password)
+
+        if not authenticated_user:
+            raise exceptions.AuthenticationFailed("Senha incorreta. Verifique os dados digitados.")
+
+        if not authenticated_user.is_active:
+            raise exceptions.AuthenticationFailed("Esta conta está inativa.")
+
+        # 4. Gera os tokens JWT para o usuário autenticado
+        refresh = self.get_token(authenticated_user)
+
+        return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "email": authenticated_user.email,
+            "username": authenticated_user.username,
+        }
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
