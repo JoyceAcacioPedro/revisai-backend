@@ -9,13 +9,16 @@ from api.views import CustomTokenObtainPairView
 
 def create_admin_quick(request):
     User = get_user_model()
-    user, _ = User.objects.get_or_create(username='admin', email='joyceacaciopedro2005@gmail.com')
-    user.set_password('AdminRevisAI2026!')
+    # Garante a busca pelo username admin
+    user, _ = User.objects.get_or_create(username='admin')
+    user.email = 'joyceacaciopedro2005@gmail.com'
+    user.set_password('AdminRevisAI2026!')  # Redefine a senha com hash correto
     user.is_staff = True
     user.is_superuser = True
+    user.is_active = True
     user.is_verified = True
     user.save()
-    return JsonResponse({"status": "Superuser criado com sucesso na nuvem!"})
+    return JsonResponse({"status": "Senha do Admin atualizada com sucesso!"})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
