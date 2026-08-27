@@ -34,14 +34,11 @@ def send_brevo_email(to_email, subject, message):
         "content-type": "application/json"
     }
 
-    # Evita bloqueios de políticas DKIM/DMARC de domínios @gmail.com
+    # Utiliza o remetente verificado na tua conta Brevo
     payload = {
         "sender": {
             "name": "RevisAI",
-            "email": "contact@brevo.com"
-        },
-        "replyTo": {
-            "email": getattr(settings, 'DEFAULT_FROM_EMAIL', 'joyceacaciopedro2005@gmail.com')
+            "email": "joyceacaciopedro2005@gmail.com"
         },
         "to": [
             {"email": to_email}
