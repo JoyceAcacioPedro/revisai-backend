@@ -34,7 +34,7 @@ def send_brevo_email(to_email, subject, message):
         "content-type": "application/json"
     }
 
-    # Utiliza o remetente verificado na tua conta Brevo
+    # Remetente verificado na conta Brevo
     payload = {
         "sender": {
             "name": "RevisAI",
@@ -317,18 +317,25 @@ def verify_email(request):
     email = request.data.get('email')
     code = request.data.get('code')
 
+    if not email or not code:
+        return Response({"error": "Email e código são obrigatórios"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=404)
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    if user.verification_code == code:
+    # Converte explicitamente para string e limpa qualquer espaço acidental
+    stored_code = str(user.verification_code).strip() if user.verification_code else ""
+    received_code = str(code).strip()
+
+    if stored_code and stored_code == received_code:
         user.is_verified = True
         user.verification_code = None
         user.save()
-        return Response({"message": "Email verified successfully"})
+        return Response({"message": "Email verified successfully"}, status=status.HTTP_200_OK)
     else:
-        return Response({"error": "Invalid code"}, status=400)
+        return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
