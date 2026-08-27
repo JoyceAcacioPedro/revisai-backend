@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 # Importa a view customizada da pasta api
 from api.views import CustomTokenObtainPairView
 
+
 def create_admin_quick(request):
     User = get_user_model()
     # Garante a busca pelo username admin
@@ -29,4 +30,8 @@ urlpatterns = [
     
     path('api/', include('api.urls')),
     path('api/setup-admin/', create_admin_quick),
+
+    path('admin/', admin.site.urls),
+    
+    
 ]

@@ -24,7 +24,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import get_user_model
 
 from rest_framework import exceptions
-
+User = get_user_model()
 
 # ==========================================
 # FUNÇÃO AUXILIAR: ENVIO VIA API HTTP BREVO
@@ -401,38 +401,31 @@ def reset_password(request):
 
 
 
-User = get_user_model()
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # 1. Pega os dados enviados pelo React
+        # Captura o e-mail/username e password vindos do payload React
         email_or_username = attrs.get("email") or attrs.get("username")
         password = attrs.get("password")
 
         if not email_or_username or not password:
-            raise exceptions.AuthenticationFailed("Email e senha são obrigatórios.")
+            raise exceptions.AuthenticationFailed("Preencha o e-mail e a palavra-passe.")
 
-        # 2. Busca o usuário pelo email (case-insensitive) ou pelo username
+        # Procura o utilizador por e-mail ou username
         user_obj = User.objects.filter(email__iexact=email_or_username).first() or \
                    User.objects.filter(username__iexact=email_or_username).first()
 
         if not user_obj:
-            raise exceptions.AuthenticationFailed("Usuário não encontrado com este e-mail.")
+            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
-        # 3. Tenta autenticar usando o username real do banco
+        # Autentica explicitamente utilizando o username guardado na BD
         authenticated_user = authenticate(username=user_obj.username, password=password)
 
-        # Se falhou, tenta autenticar usando o e-mail como username (caso o USERNAME_FIELD do model seja email)
         if not authenticated_user:
-            authenticated_user = authenticate(username=user_obj.email, password=password)
-
-        if not authenticated_user:
-            raise exceptions.AuthenticationFailed("Senha incorreta. Verifique os dados digitados.")
+            raise exceptions.AuthenticationFailed("Credenciais inválidas.")
 
         if not authenticated_user.is_active:
-            raise exceptions.AuthenticationFailed("Esta conta está inativa.")
+            raise exceptions.AuthenticationFailed("Utilizador inativo.")
 
-        # 4. Gera os tokens JWT para o usuário autenticado
         refresh = self.get_token(authenticated_user)
 
         return {
