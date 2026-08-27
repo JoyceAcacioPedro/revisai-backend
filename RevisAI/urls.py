@@ -16,11 +16,12 @@ def create_admin_quick(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
     
-    # Rota atualizada para bater com a chamada do Frontend (/api/user/login/)
+    # IMPORTANTE: Colocar as rotas de login ANTES do include('api.urls')
+    # para evitar conflito com o router.register(r'user', UserViewSet)
     path('api/user/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
+    path('api/', include('api.urls')),
     path('api/setup-admin/', create_admin_quick),
 ]
