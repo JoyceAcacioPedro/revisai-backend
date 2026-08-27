@@ -34,9 +34,13 @@ def send_brevo_email(to_email, subject, message):
         "content-type": "application/json"
     }
 
+    # Evita bloqueios de políticas DKIM/DMARC de domínios @gmail.com
     payload = {
         "sender": {
             "name": "RevisAI",
+            "email": "contact@brevo.com"
+        },
+        "replyTo": {
             "email": getattr(settings, 'DEFAULT_FROM_EMAIL', 'joyceacaciopedro2005@gmail.com')
         },
         "to": [
@@ -70,15 +74,12 @@ class UserViewSet(viewsets.ModelViewSet):
     def register(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            # 1. Guarda o utilizador na BD
             user = serializer.save()
 
-            # 2. Gera o código de verificação
             code = str(random.randint(100000, 999999))
             user.verification_code = code
             user.save()
 
-            # 3. Conteúdo do E-mail
             subject = 'Welcome to RevisAI — Verify your email'
             message = f'''Hey {user.first_name or "there"}! 👋
 
@@ -97,10 +98,7 @@ If you didn't create an account, you can safely ignore this email.
 Study smart,
 The RevisAI Team ✦'''
 
-            # 4. Envio direto via API HTTP (sem bloquear a resposta)
             send_brevo_email(user.email, subject, message)
-
-            # 5. Retorna 201 Created imediatamente ao Vercel
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -143,7 +141,6 @@ class TopicViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         topic = serializer.save(user=self.request.user)
 
-        # Guarda os ficheiros
         files = self.request.FILES.getlist('files')
         for f in files:
             TopicFile.objects.create(topic=topic, file=f, name=f.name)
